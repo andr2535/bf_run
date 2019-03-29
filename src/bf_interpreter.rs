@@ -33,59 +33,55 @@ impl BfInterpreter {
 	}
 
 	fn skip_loops(iterator: &mut std::str::Chars<'_>) {
-		
+		while let Some(character) = iterator.next() {
+			match character {
+				'[' => BfInterpreter::skip_loops(iterator),
+				']' => return,
+				_ => ()
+			}
+		}
 	}
 
 	pub fn start(&mut self) {
 		let mut mem_index = 0;
 		let mut iterator = self.code.chars();
 		let mut loop_stack = Vec::new();
-		let mut skip_loops = 0;
 
 		while let Some(character) = iterator.next() {
-			if skip_loops == 0 {
-				match character {
-					'+' => {
-						let mem_ref = self.memory.get_ref(mem_index);
-						let new_value = mem_ref.wrapping_add(1);
-						*mem_ref = new_value;
-					},
-					'-' => {
-						let mem_ref = self.memory.get_ref(mem_index);
-						let new_value = mem_ref.wrapping_sub(1);
-						*mem_ref = new_value;
-					},
-					'<' => mem_index -= 1,
-					'>' => mem_index += 1,
-					',' => {unimplemented!(", is not implemented")} // Read byte from user
-					'.' => print!("{}", (*self.memory.get_ref(mem_index) as u8) as char),
-					'[' => {
-						if *self.memory.get_ref(mem_index) != 0 {
-							loop_stack.push(iterator.clone());
-						}
-						else {
-							skip_loops += 1;
-						}
-					},
-					']' => {
-						if *self.memory.get_ref(mem_index) != 0 {
-							iterator = loop_stack.last().unwrap().clone();
-						}
-						else {
-							loop_stack.pop();
-						}
+			match character {
+				'+' => {
+					let mem_ref = self.memory.get_ref(mem_index);
+					let new_value = mem_ref.wrapping_add(1);
+					*mem_ref = new_value;
+				},
+				'-' => {
+					let mem_ref = self.memory.get_ref(mem_index);
+					let new_value = mem_ref.wrapping_sub(1);
+					*mem_ref = new_value;
+				},
+				'<' => mem_index -= 1,
+				'>' => mem_index += 1,
+				',' => {unimplemented!(", is not implemented")} // Read byte from user
+				'.' => print!("{}", (*self.memory.get_ref(mem_index) as u8) as char),
+				'[' => {
+					if *self.memory.get_ref(mem_index) != 0 {
+						loop_stack.push(iterator.clone());
 					}
-					other => ()
+					else {
+						BfInterpreter::skip_loops(&mut iterator);
+					}
+				},
+				']' => {
+					if *self.memory.get_ref(mem_index) != 0 {
+						iterator = loop_stack.last().unwrap().clone();
+					}
+					else {
+						loop_stack.pop();
+					}
 				}
-			}
-			else {
-				match character {
-					'[' => skip_loops += 1,
-					']' => skip_loops -= 1,
-					_ => ()
-				}
+				other => ()
 			}
 		}
+		println!("{:?}", self);
 	}
-
 }
