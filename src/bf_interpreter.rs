@@ -92,6 +92,24 @@ impl<T: BfMemory> BfInterpreter<T> {
 		}
 	}
 
+	#[inline(never)]
+	fn get_char(target: &mut u8) {
+		use std::io::{stdin, Read};
+		let stdin = stdin();
+		let mut lock = stdin.lock();
+		let mut buf = [0u8; 1];
+		lock.read_exact(&mut buf).unwrap();
+		*target = buf[0];
+	}
+	#[inline(never)]
+	fn print_char(source: &u8) {
+		print!("{}", *source as char);
+		use std::io;
+		use io::Write;
+		let mut stdout = io::stdout();
+		stdout.flush().unwrap();
+	}
+	
 	pub fn start(&mut self) {
 		let mut mem_index = 0;
 		let mut iterator = self.code.chars();
@@ -111,21 +129,8 @@ impl<T: BfMemory> BfInterpreter<T> {
 				},
 				'<' => mem_index -= 1,
 				'>' => mem_index += 1,
-				',' => {
-					use std::io::{stdin, Read};
-					let stdin = stdin();
-					let mut lock = stdin.lock();
-					let mut buf = [0u8; 1];
-					lock.read_exact(&mut buf).unwrap();
-					*self.memory.get_ref(mem_index) = buf[0];
-				}
-				'.' => {
-					print!("{}", (*self.memory.get_ref(mem_index) as u8) as char);
-					use std::io;
-					use io::Write;
-					let mut stdout = io::stdout();
-					stdout.flush().unwrap();
-				},
+				',' => BfInterpreter::<T>::get_char(self.memory.get_ref(mem_index)),
+				'.' => BfInterpreter::<T>::print_char(self.memory.get_ref(mem_index)),
 				'[' => {
 					if *self.memory.get_ref(mem_index) != 0 {
 						loop_stack.push(iterator.clone());
