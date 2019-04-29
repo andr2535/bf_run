@@ -11,7 +11,7 @@ fn main() {
 			if i == 0 {continue;}
 			file_string = Some(argument);
 		};
-		if let Some(file_string) = file_string {file_string} else {panic!("Missing file_path parameter!")}
+		file_string.unwrap()
 	};
 
 	let file = File::open(file_string).unwrap();
@@ -19,14 +19,23 @@ fn main() {
 	//let bf_memory = bf_memory::BfMemoryMemSafe::new();
 	let bf_memory = bf_memory::BfMemoryMemSafeSingleArray::new();
 	
+	let optimiser_on = true;
+
+	if optimiser_on {
+		let mut bf_int_opt = bf_opt_interpreter::BfOptInterpreter::new(file, bf_memory);
+		//bf_int_opt.print_ops();
+		bf_int_opt.optimize();
+		//println!("\n\n");
+		//bf_int_opt.print_ops();
+		bf_int_opt.start();
+		//println!("{:?}", bf_int_opt);
+	}
+	else {
+		let mut bf_int = bf_interpreter::BfInterpreter::new(file, bf_memory);
+		bf_int.start();
+		//println!("{:?}", bf_int);
+	}
+
 	
-	//let mut bf_int = bf_interpreter::BfInterpreter::new(file, bf_memory);
-	//bf_int.start();
-	let mut bf_int_opt = bf_opt_interpreter::BfOptInterpreter::new(file, bf_memory);
-	//bf_int_opt.print_ops();
-	bf_int_opt.optimize();
-	//println!("\n\n");
-	bf_int_opt.start();
-	//bf_int_opt.print_ops();
 	println!("");
 }

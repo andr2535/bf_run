@@ -1,10 +1,11 @@
 use super::bf_memory::BfMemory;
 
+#[derive(Debug)]
 pub struct BfInterpreter<T> {
 	memory: T,
 	code: String
 }
-impl<T: BfMemory> BfInterpreter<T> {
+impl<T: BfMemory + std::fmt::Debug> BfInterpreter<T> {
 	pub fn new(file: std::fs::File, bf_memory: T) -> BfInterpreter<T> {
 		use std::io::{BufReader, Read};
 		

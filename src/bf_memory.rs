@@ -2,6 +2,7 @@ pub trait BfMemory {
 	fn get_ref(&mut self, index:i32) -> &mut u8;
 }
 
+#[derive(Debug)]
 pub struct BfMemoryMemSafe {
 	negatives: Vec<u8>,
 	positives: Vec<u8>
@@ -21,12 +22,13 @@ impl BfMemory for BfMemoryMemSafe {
 	}
 }
 
+#[derive(Debug)]
 pub struct BfMemoryMemSafeSingleArray {
 	vector: Vec<u8>
 }
 impl BfMemoryMemSafeSingleArray {
 	pub fn new() -> BfMemoryMemSafeSingleArray {
-		BfMemoryMemSafeSingleArray{vector: vec![0u8;2]}
+		BfMemoryMemSafeSingleArray{vector: vec![0u8;10]}
 	}
 	#[inline(never)]
 	fn increase_memory(&mut self) {
@@ -66,5 +68,20 @@ impl BfMemoryMemUnsafe {
 impl BfMemory for BfMemoryMemUnsafe {
 	fn get_ref(&mut self, index: i32) -> &mut u8 {
 		&mut self.array[BF_MEMORY_UNSAFE_SIZE/2 + index as usize]
+	}
+}
+impl std::fmt::Debug for BfMemoryMemUnsafe {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		let mut string = String::with_capacity(self.array.len()*4);
+		string.push('[');
+		&self.array.iter().for_each(|value| {
+			string.push_str(format!("{:X}, ", *value).as_ref());
+		});
+		if self.array.len() > 0 {
+			string.pop();
+			string.pop();
+		}
+		string.push(']');
+		write!(f, "{}", string)
 	}
 }

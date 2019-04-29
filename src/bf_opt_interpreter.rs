@@ -2,21 +2,20 @@ use super::bf_memory::BfMemory;
 
 #[derive(Debug)]
 enum Operation {
-	Add(u8),
-	Sub(u8),
-	Left(i32),
-	Right(i32),
+	Mod(i8),
+	Move(i32),
 	Loop(Vec<Operation>),
-	SetZero,
+	SetValue(u8),
 	GetInput,
 	PrintOutput
 }
 
+#[derive(Debug)]
 pub struct BfOptInterpreter<T> {
 	memory: T,
 	operations: Vec<Operation>
 }
-impl<T:BfMemory> BfOptInterpreter<T> {
+impl<T:BfMemory + std::fmt::Debug> BfOptInterpreter<T> {
 	pub fn new(file: std::fs::File, bf_memory: T) -> BfOptInterpreter<T> {
 		use std::io::{BufReader, Read};
 		
@@ -34,10 +33,10 @@ impl<T:BfMemory> BfOptInterpreter<T> {
 		
 		while let Some(character) = iterator.next() {
 			match character {
-				'+' => vec.push(Operation::Add(1)),
-				'-' => vec.push(Operation::Sub(1)),
-				'<' => vec.push(Operation::Left(1)),
-				'>' => vec.push(Operation::Right(1)),
+				'+' => vec.push(Operation::Mod(1)),
+				'-' => vec.push(Operation::Mod(-1)),
+				'<' => vec.push(Operation::Move(-1)),
+				'>' => vec.push(Operation::Move(1)),
 				'[' => vec.push(Operation::Loop(BfOptInterpreter::<T>::conv_string_to_operations(iterator))),
 				']' => break,
 				',' => vec.push(Operation::GetInput),
@@ -55,45 +54,31 @@ impl<T:BfMemory> BfOptInterpreter<T> {
 		let mut new_vec = Vec::new();
 		old_vec.into_iter().for_each(|operation| {
 			match operation {
-				Operation::Add(value) => {
-					if let Some(Operation::Add(last)) = new_vec.last_mut() {
-						*last += value;
-					}
-					else {
-						new_vec.push(Operation::Add(*value));
-					}
-				},
-				Operation::Sub(value) => {
-					if let Some(Operation::Sub(last)) = new_vec.last_mut() {
-						*last += value;
-					}
-					else {
-						new_vec.push(Operation::Sub(*value));
+				Operation::Mod(value) => {
+					let last_mut = new_vec.last_mut();
+					match last_mut {
+						Some(Operation::Mod(last)) => *last += value,
+						Some(Operation::SetValue(last)) => *last += *value as u8,
+						_ => new_vec.push(Operation::Mod(*value))
 					}
 				},
-				Operation::Left(value) => {
-					if let Some(Operation::Left(last)) = new_vec.last_mut() {
-						*last += value;
-					}
-					else {
-						new_vec.push(Operation::Left(*value));
-					}
-				},
-				Operation::Right(value) => {
-					if let Some(Operation::Right(last)) = new_vec.last_mut() {
-						*last += value;
-					}
-					else {
-						new_vec.push(Operation::Right(*value));
+				Operation::Move(value) => {
+					let last_mut = new_vec.last_mut();
+					match last_mut {
+						Some(Operation::Move(last)) => *last += value,
+						_ => new_vec.push(Operation::Move(*value))
 					}
 				},
 				Operation::Loop(operations) => {
 					if operations.len() == 1 {
-						if let Some(Operation::Sub(1)) = operations.last() {
-							new_vec.push(Operation::SetZero);
-						}
-						else if let Some(Operation::Add(1)) = operations.last() {
-							new_vec.push(Operation::SetZero);
+						if let Some(Operation::Mod(value)) = operations.last() {
+							if *value == 1 || *value == -1 {
+								new_vec.push(Operation::SetValue(0));
+							}
+							else {
+								let loop_ops = BfOptInterpreter::<T>::optimise_operations(operations.as_slice());
+								new_vec.push(Operation::Loop(loop_ops));
+							}
 						}
 						else {
 							let loop_ops = BfOptInterpreter::<T>::optimise_operations(operations.as_slice());
@@ -105,14 +90,20 @@ impl<T:BfMemory> BfOptInterpreter<T> {
 						new_vec.push(Operation::Loop(loop_ops));
 					}
 				},
-				Operation::SetZero => new_vec.push(Operation::SetZero),
+				Operation::SetValue(value) => {
+					let last_mut = new_vec.last_mut();
+					match last_mut {
+						Some(Operation::Mod(_value)) => *last_mut.unwrap() = Operation::SetValue(*value),
+						Some(Operation::SetValue(_value)) => *last_mut.unwrap() = Operation::SetValue(*value),
+						_ => new_vec.push(Operation::SetValue(*value))
+					}
+				},
 				Operation::GetInput => new_vec.push(Operation::GetInput),
 				Operation::PrintOutput => new_vec.push(Operation::PrintOutput)
 			}
 		});
 		new_vec
 	}
-	#[inline(never)]
 	fn get_char(target: &mut u8) {
 		use std::io::{stdin, Read};
 		let stdin = stdin();
@@ -121,7 +112,6 @@ impl<T:BfMemory> BfOptInterpreter<T> {
 		lock.read_exact(&mut buf).unwrap();
 		*target = buf[0];
 	}
-	#[inline(never)]
 	fn print_char(source: &u8) {
 		print!("{}", *source as char);
 		use std::io;
@@ -138,22 +128,17 @@ impl<T:BfMemory> BfOptInterpreter<T> {
 		
 		vec.into_iter().for_each(|operation| {
 			match operation {
-				Operation::Add(value) => {
+				Operation::Mod(value) => {
 					let mem_ref = memory.get_ref(mem_index);
-					*mem_ref = mem_ref.wrapping_add(*value);
+					*mem_ref = mem_ref.wrapping_add(*value as u8);
 				},
-				Operation::Sub(value) => {
-					let mem_ref = memory.get_ref(mem_index);
-					*mem_ref = mem_ref.wrapping_sub(*value);
-				},
-				Operation::Left(value) => mem_index -= value,
-				Operation::Right(value) => mem_index += value,
+				Operation::Move(value) => mem_index -= value,
 				Operation::Loop(operations) => {
 					while *memory.get_ref(mem_index) != 0 {
 						mem_index = BfOptInterpreter::<T>::exec_operations_vec(mem_index, memory, &operations);
 					}
 				},
-				Operation::SetZero => *memory.get_ref(mem_index) = 0,
+				Operation::SetValue(value) => *memory.get_ref(mem_index) = *value,
 				Operation::GetInput => BfOptInterpreter::<T>::get_char(memory.get_ref(mem_index)),
 				Operation::PrintOutput => BfOptInterpreter::<T>::print_char(memory.get_ref(mem_index))
 			}
