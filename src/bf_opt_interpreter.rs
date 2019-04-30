@@ -133,11 +133,10 @@ impl<T:BfMemory + std::fmt::Debug> BfOptInterpreter<T> {
 					*mem_ref = mem_ref.wrapping_add(*value as u8);
 				},
 				Operation::Move(value) => mem_index -= value,
-				Operation::Loop(operations) => {
+				Operation::Loop(operations) => 
 					while *memory.get_ref(mem_index) != 0 {
 						mem_index = BfOptInterpreter::<T>::exec_operations_vec(mem_index, memory, &operations);
-					}
-				},
+					},
 				Operation::SetValue(value) => *memory.get_ref(mem_index) = *value,
 				Operation::GetInput => BfOptInterpreter::<T>::get_char(memory.get_ref(mem_index)),
 				Operation::PrintOutput => BfOptInterpreter::<T>::print_char(memory.get_ref(mem_index))
