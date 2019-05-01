@@ -1,7 +1,7 @@
 use super::bf_memory::BfMemory;
 
 #[derive(Debug)]
-enum Operation {
+pub enum Operation {
 	Mod(i8),
 	Move(i32),
 	Loop(Vec<Operation>),
@@ -104,16 +104,16 @@ impl<T:BfMemory + std::fmt::Debug> BfOptInterpreter<T> {
 		});
 		new_vec
 	}
-	fn get_char(target: &mut u8) {
+	pub fn get_char() -> u8 {
 		use std::io::{stdin, Read};
 		let stdin = stdin();
 		let mut lock = stdin.lock();
 		let mut buf = [0u8; 1];
 		lock.read_exact(&mut buf).unwrap();
-		*target = buf[0];
+		buf[0]
 	}
-	fn print_char(source: &u8) {
-		print!("{}", *source as char);
+	pub fn print_char(source: u8) {
+		print!("{}", source as char);
 		use std::io;
 		use io::Write;
 		let mut stdout = io::stdout();
@@ -121,32 +121,37 @@ impl<T:BfMemory + std::fmt::Debug> BfOptInterpreter<T> {
 	}
 
 	pub fn start(&mut self) {
-		BfOptInterpreter::<T>::exec_operations_vec(0, &mut self.memory, &self.operations);
+		let start_value = *self.memory.get_ref(0);
+		let (mem_index, cur_pos_value) = BfOptInterpreter::<T>::exec_operations_vec(0, start_value, &mut self.memory, &self.operations);
+		*self.memory.get_ref(mem_index) = cur_pos_value;
 	}
 
-	fn exec_operations_vec(mut mem_index:i32, memory: &mut T, vec:&Vec<Operation>) -> i32 {
-		
+	fn exec_operations_vec(mut mem_index:i32, mut cur_pos_value:u8, memory: &mut T, vec:&Vec<Operation>) -> (i32, u8)
+	{
 		vec.into_iter().for_each(|operation| {
 			match operation {
-				Operation::Mod(value) => {
-					let mem_ref = memory.get_ref(mem_index);
-					*mem_ref = mem_ref.wrapping_add(*value as u8);
+				Operation::Mod(value) => cur_pos_value = cur_pos_value.wrapping_add(*value as u8),
+				Operation::Move(value) => {
+					*memory.get_ref(mem_index) = cur_pos_value;
+					mem_index -= value;
+					cur_pos_value = *memory.get_ref(mem_index);
 				},
-				Operation::Move(value) => mem_index -= value,
 				Operation::Loop(operations) => 
-					while *memory.get_ref(mem_index) != 0 {
-						mem_index = BfOptInterpreter::<T>::exec_operations_vec(mem_index, memory, &operations);
+					while cur_pos_value != 0 {
+						let (new_mem_index, new_cur_pos_value) = BfOptInterpreter::<T>::exec_operations_vec(mem_index, cur_pos_value, memory, operations);
+						mem_index = new_mem_index;
+						cur_pos_value = new_cur_pos_value;
 					},
-				Operation::SetValue(value) => *memory.get_ref(mem_index) = *value,
-				Operation::GetInput => BfOptInterpreter::<T>::get_char(memory.get_ref(mem_index)),
-				Operation::PrintOutput => BfOptInterpreter::<T>::print_char(memory.get_ref(mem_index))
+				Operation::SetValue(value) => cur_pos_value = *value,
+				Operation::GetInput => cur_pos_value = BfOptInterpreter::<T>::get_char(),
+				Operation::PrintOutput => BfOptInterpreter::<T>::print_char(cur_pos_value)
 			}
 		});
-		mem_index
+		(mem_index, cur_pos_value)
 	}
 
 
-	pub fn print_ops(&self) {
-		println!("{:?}", self.operations);
+	pub fn get_ops(&self) -> &[Operation] {
+		self.operations.as_slice()
 	}
 }

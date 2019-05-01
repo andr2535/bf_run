@@ -23,12 +23,12 @@ fn main() {
 
 	if optimiser_on {
 		let mut bf_int_opt = bf_opt_interpreter::BfOptInterpreter::new(file, bf_memory);
-		//bf_int_opt.print_ops();
+		//println!("{:?}", bf_int_opt.get_ops());
 		bf_int_opt.optimize();
 		//println!("\n\n");
-		//bf_int_opt.print_ops();
 		bf_int_opt.start();
-		//println!("{:?}", bf_int_opt);
+		//println!("\n\n");
+		//println!("{:?}", bf_int_opt.get_ops());
 	}
 	else {
 		let mut bf_int = bf_interpreter::BfInterpreter::new(file, bf_memory);
