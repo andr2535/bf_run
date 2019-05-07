@@ -57,8 +57,8 @@ impl<T:BfMemory + std::fmt::Debug> BfOptInterpreter<T> {
 				Operation::Mod(value) => {
 					let last_mut = new_vec.last_mut();
 					match last_mut {
-						Some(Operation::Mod(last)) => *last += value,
-						Some(Operation::SetValue(last)) => *last += *value as u8,
+						Some(Operation::Mod(last)) => *last = (*last).wrapping_add(*value),
+						Some(Operation::SetValue(last)) => *last = (*last).wrapping_add((*value) as u8),
 						_ => new_vec.push(Operation::Mod(*value))
 					}
 				},

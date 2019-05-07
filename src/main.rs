@@ -20,10 +20,11 @@ fn main() {
 	//let bf_memory = bf_memory::BfMemoryMemUnsafe::new();
 	//let bf_memory = bf_memory::BfMemoryMemSafe::new();
 	let mut bf_memory = bf_memory::BfMemoryMemSafeSingleArray::new();
+	
 	let bf_recompiler = BfRecompiler::new(file, bf_memory);
 	bf_recompiler.start_exec();
-	/*
-	let optimiser_on = true;
+	
+	/*let optimiser_on = true;
 
 	if optimiser_on {
 		let mut bf_int_opt = bf_opt_interpreter::BfOptInterpreter::new(file, bf_memory);
