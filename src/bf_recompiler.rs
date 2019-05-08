@@ -95,8 +95,9 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 		tmp_exec_store.push_opcodes(&[0x59, 0x5a]); // pop rcx, pop rdx.
 	}
 
-	/// "dl" register stores the currently pointed to values.
+	/// "dl" register stores value of the currently pointed to value.
 	/// "ecx" register stores the current index.
+	/// "rax" register points to the last used position in memory.
 	fn convert_to_machine_code(operations: &[Operation], bf_memory_addr: [u8;8], tmp_exec_store: &mut TmpMemForJit) {
 		operations.into_iter().for_each(|operation| {
 			match operation {
@@ -107,14 +108,6 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 				},
 				Operation::Move(move_value) => {
 					// Put value of "dl" back into its position in bf_memory.
-					// First argument for get_ref, the memory.
-					tmp_exec_store.push_opcodes(&[0x48, 0xbf]); // movabs rdi.
-					tmp_exec_store.push_opcodes(&bf_memory_addr); // bf_memory_addr as argument for movabs rdi.
-					// Second argument for get_ref, the index.
-					tmp_exec_store.push_opcodes(&[0x89, 0xce]); // mov esi, ecx.
-					// Call to get the reference.
-					BfRecompiler::<T>::add_fn_call(BfRecompiler::<T>::get_ref as usize, tmp_exec_store);
-					// Place value back into the reference
 					tmp_exec_store.push_opcodes(&[0x88, 0x10]); // mov [rax], dl
 					
 					// Increase the index.
@@ -161,12 +154,16 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 					tmp_exec_store.mut_vec().push(*value); // argument for mov dl.
 				},
 				Operation::GetInput => {
+					tmp_exec_store.mut_vec().push(0x50); // Push rax
 					BfRecompiler::<T>::add_fn_call(BfRecompiler::<T>::fetch_u8 as usize, tmp_exec_store);
 					tmp_exec_store.push_opcodes(&[0x88, 0xc2]); // mov dl, al
+					tmp_exec_store.mut_vec().push(0x58); // Pop rax
 				},
 				Operation::PrintOutput => {
+					tmp_exec_store.mut_vec().push(0x50); // Push rax
 					tmp_exec_store.push_opcodes(&[0x40, 0x88, 0xd7]); // mov dil, dl
 					BfRecompiler::<T>::add_fn_call(BfRecompiler::<T>::print_u8 as usize, tmp_exec_store);
+					tmp_exec_store.mut_vec().push(0x58); // Pop rax
 				}
 			}
 		});

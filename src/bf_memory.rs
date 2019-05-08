@@ -67,7 +67,7 @@ impl BfMemoryMemUnsafe {
 }
 impl BfMemory for BfMemoryMemUnsafe {
 	fn get_ref(&mut self, index: i32) -> &mut u8 {
-		&mut self.array[BF_MEMORY_UNSAFE_SIZE/2 + index as usize]
+		unsafe {self.array.get_unchecked_mut(((BF_MEMORY_UNSAFE_SIZE as i32)/2 + index) as usize)}
 	}
 }
 impl std::fmt::Debug for BfMemoryMemUnsafe {
