@@ -1,5 +1,23 @@
+use crate::bf_recompiler::RecompiledMemory;
+
 pub trait BfMemory {
 	fn get_ref(&mut self, index:i32) -> &mut u8;
+	fn get_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledMemory;
+	fn get_standard_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledMemory {
+		let mut recompiled_memory = RecompiledMemory::new();
+		// Increase the index.
+		let move_value:[u8;4] = unsafe {std::mem::transmute(move_value)};
+		recompiled_memory.push_opcodes(&[0x81, 0xc1]); // Add ecx
+		recompiled_memory.push_opcodes(&move_value); // argument for add to ecx
+
+		// Fetch reference to new "dl" value.
+		recompiled_memory.push_opcodes(&[0x48, 0xbf]); // movabs rdi.
+		recompiled_memory.push_opcodes(&bf_memory_addr); // bf_memory_addr as argument for movabs rdi.
+		// Second argument for get_ref, the index.
+		recompiled_memory.push_opcodes(&[0x89, 0xce]); // mov esi, ecx.
+		recompiled_memory.add_fn_call(get_ref_fn_addr);
+		recompiled_memory
+	}
 }
 
 #[derive(Debug)]
@@ -19,6 +37,9 @@ impl BfMemory for BfMemoryMemSafe {
 			vec.push(0);
 		}
 		unsafe {vec.get_unchecked_mut(index)}
+	}
+	fn get_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledMemory {
+		BfMemoryMemSafe::get_standard_move_ops(bf_memory_addr, get_ref_fn_addr, move_value)
 	}
 }
 
@@ -53,6 +74,9 @@ impl BfMemory for BfMemoryMemSafeSingleArray {
 			self.get_ref(index)
 		}
 	}
+	fn get_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledMemory {
+		BfMemoryMemSafe::get_standard_move_ops(bf_memory_addr, get_ref_fn_addr, move_value)
+	}
 }
 
 const BF_MEMORY_UNSAFE_SIZE: usize = 65535;
@@ -68,6 +92,15 @@ impl BfMemoryMemUnsafe {
 impl BfMemory for BfMemoryMemUnsafe {
 	fn get_ref(&mut self, index: i32) -> &mut u8 {
 		unsafe {self.array.get_unchecked_mut(((BF_MEMORY_UNSAFE_SIZE as i32)/2 + index) as usize)}
+	}
+	fn get_move_ops(_bf_memory_addr: [u8; 8], _get_ref_fn_addr: usize, move_value: i32) -> RecompiledMemory {
+		let mut recompiled_memory = RecompiledMemory::new();
+		// Modify the index.
+		let move_value:[u8;4] = unsafe {std::mem::transmute(move_value)};
+		recompiled_memory.push_opcodes(&[0x48, 0x8d, 0x80]); // lea rax, [rax + next argument]
+		recompiled_memory.push_opcodes(&move_value); // argument for lea.
+
+		recompiled_memory
 	}
 }
 impl std::fmt::Debug for BfMemoryMemUnsafe {
