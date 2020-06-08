@@ -1,4 +1,5 @@
-use super::bf_memory::BfMemory;
+use crate::bf_memory::BfMemory;
+use super::Executor;
 
 #[derive(Debug)]
 pub enum Operation {
@@ -13,21 +14,32 @@ pub enum Operation {
 #[derive(Debug)]
 pub struct BfOptInterpreter<T> {
 	memory: T,
-	operations: Vec<Operation>
+	operations: Vec<Operation>,
+	verbose: bool
 }
-impl<T:BfMemory + std::fmt::Debug> BfOptInterpreter<T> {
-	pub fn new(file: std::fs::File, bf_memory: T) -> BfOptInterpreter<T> {
-		use std::io::{BufReader, Read};
-		
-		let mut string = String::new();
-		let mut buf_reader = BufReader::new(file);
-		buf_reader.read_to_string(&mut string).unwrap();
-
-		let mut iterator = string.chars();
+impl<T: BfMemory + std::fmt::Debug> Executor<T> for BfOptInterpreter<T> {
+	fn new(code: String, bf_memory: T, enable_optimizations: bool, verbose: bool) -> BfOptInterpreter<T> {
+		let mut iterator = code.chars();
 		let operations = BfOptInterpreter::<T>::conv_string_to_operations(&mut iterator);
 
-		BfOptInterpreter{memory: bf_memory, operations: operations}
+		let mut interpreter = BfOptInterpreter{memory: bf_memory, operations, verbose};
+		
+		if enable_optimizations {interpreter.optimize()};
+		if interpreter.verbose {
+			println!("Converted operations:\n{:?}", interpreter.get_ops());
+		}
+		interpreter
 	}
+	fn start(mut self) {
+		let start_value = *self.memory.get_ref(0);
+		let (mem_index, cur_pos_value) = BfOptInterpreter::<T>::exec_operations_vec(0, start_value, &mut self.memory, &self.operations);
+		*self.memory.get_ref(mem_index) = cur_pos_value;
+		if self.verbose {
+			println!("\nINFO: Memory after running:\n{:?}", self.memory);
+		}
+	}
+}
+impl<T:BfMemory + std::fmt::Debug> BfOptInterpreter<T> {
 	fn conv_string_to_operations(iterator:&mut std::str::Chars<'_>) -> Vec<Operation> {
 		let mut vec = Vec::new();
 		
@@ -52,7 +64,7 @@ impl<T:BfMemory + std::fmt::Debug> BfOptInterpreter<T> {
 	}
 	fn optimise_operations(old_vec: &[Operation]) -> Vec<Operation> {
 		let mut new_vec = Vec::new();
-		old_vec.into_iter().for_each(|operation| {
+		old_vec.iter().for_each(|operation| {
 			match operation {
 				Operation::Mod(value) => {
 					let last_mut = new_vec.last_mut();
@@ -120,15 +132,9 @@ impl<T:BfMemory + std::fmt::Debug> BfOptInterpreter<T> {
 		stdout.flush().unwrap();
 	}
 
-	pub fn start(&mut self) {
-		let start_value = *self.memory.get_ref(0);
-		let (mem_index, cur_pos_value) = BfOptInterpreter::<T>::exec_operations_vec(0, start_value, &mut self.memory, &self.operations);
-		*self.memory.get_ref(mem_index) = cur_pos_value;
-	}
-
-	fn exec_operations_vec(mut mem_index:i32, mut cur_pos_value:u8, memory: &mut T, vec:&Vec<Operation>) -> (i32, u8)
+	fn exec_operations_vec(mut mem_index:i32, mut cur_pos_value:u8, memory: &mut T, vec:&[Operation]) -> (i32, u8)
 	{
-		vec.into_iter().for_each(|operation| {
+		vec.iter().for_each(|operation| {
 			match operation {
 				Operation::Mod(value) => cur_pos_value = cur_pos_value.wrapping_add(*value as u8),
 				Operation::Move(value) => {

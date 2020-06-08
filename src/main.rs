@@ -1,44 +1,147 @@
 use std::fs::File;
 
+use clap::Clap;
+
 pub mod bf_memory;
-mod bf_interpreter;
-mod bf_opt_interpreter;
-mod bf_recompiler;
-use bf_recompiler::BfRecompiler;
-use bf_memory::BfMemory;
+mod executors;
+use executors::*;
+
+#[derive(Debug)]
+enum ExecutorArg {
+	OldInterpreter,
+	NewInterpreter,
+	Recompiler
+}
+impl std::str::FromStr for ExecutorArg {
+	type Err = ArgumentParseError;
+
+	fn from_str(s: &str) -> Result<ExecutorArg, ArgumentParseError> {
+		match s {
+			"oi" => Ok(ExecutorArg::OldInterpreter),
+			"ni" => Ok(ExecutorArg::NewInterpreter),
+			"r"  => Ok(ExecutorArg::Recompiler),
+			_ => Err(ArgumentParseError::ExecutorParseError(s.to_string()))
+		}
+	}
+}
+
+#[derive(Clap, Debug)]
+enum MemoryType {
+	UnsafeArray,
+	DualArray,
+	SingleArray
+}
+impl std::str::FromStr for MemoryType {
+	type Err = ArgumentParseError;
+
+	fn from_str(s: &str) -> Result<MemoryType, ArgumentParseError> {
+		match s {
+			"ua" => Ok(MemoryType::UnsafeArray),
+			"da" => Ok(MemoryType::DualArray),
+			"sa" => Ok(MemoryType::SingleArray),
+			_ => Err(ArgumentParseError::MemoryTypeParseError(s.to_string()))
+		}
+	}
+}
+
+#[derive(Debug)]
+enum ArgumentParseError {
+	ExecutorParseError(String),
+	MemoryTypeParseError(String)
+}
+impl std::error::Error for ArgumentParseError { }
+impl std::fmt::Display for ArgumentParseError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			ArgumentParseError::ExecutorParseError(err_string) => write!(f, "Error parsing executor string '{}'", err_string),
+			ArgumentParseError::MemoryTypeParseError(err_string) => write!(f, "Error parsing memory type '{}'", err_string)
+		}
+	}
+}
+
+#[derive(Clap, Debug)]
+#[clap(name = "Brainfuck Interpreter", about = "A Brainfuck interpreter and recompiler")]
+struct Opts {
+	file_name: String,
+	/// Old interpreter: 'oi'
+	/// New interpreter: 'ni'
+	/// Recompiler: 'r'
+	#[clap(short = "e", long = "executor", default_value = "r")]
+	executor: ExecutorArg,
+	/// Unsafe array: 'ua'
+	/// Single array: 'sa'
+	/// Dual array: 'da'
+	#[clap(short = "m", long = "memory_type", default_value = "ua")]
+	memory_type: MemoryType,
+	/// Disables optimization passes
+	#[clap(long = "disable_optimization")]
+	disable_optimization_passes: bool,
+	/// Prints various information about the execution
+	#[clap(short = "v", long = "verbose")]
+	verbose: bool
+}
 fn main() {
-	let file_string = {
-		let mut file_string = None;
-		for (i, argument) in std::env::args().enumerate() {
-			if i == 0 {continue;}
-			file_string = Some(argument);
-		};
-		file_string.unwrap()
+	let opts = Opts::parse();
+
+	let code = {
+		use std::io::{Read};
+		let mut code = String::new();
+		File::open(opts.file_name).unwrap().read_to_string(&mut code).unwrap();
+		code
 	};
 
-	let file = File::open(file_string).unwrap();
-	let bf_memory = bf_memory::BfMemoryMemUnsafe::new();
-	//let bf_memory = bf_memory::BfMemoryMemSafe::new();
-	//let mut bf_memory = bf_memory::BfMemoryMemSafeSingleArray::new();
-	
-	let bf_recompiler = BfRecompiler::new(file, bf_memory);
-	bf_recompiler.start_exec();
-	/*
-	let optimiser_on = true;
-
-	if optimiser_on {
-		let mut bf_int_opt = bf_opt_interpreter::BfOptInterpreter::new(file, bf_memory);
-		//println!("{:?}", bf_int_opt.get_ops());
-		bf_int_opt.optimize();
-		//println!("\n\n");
-		bf_int_opt.start();
-		//println!("\n\n");
-		//println!("{:?}", bf_int_opt.get_ops());
+	match &opts.memory_type {
+		MemoryType::DualArray => {
+			let bf_memory = bf_memory::BfMemoryMemSafe::new();
+			match &opts.executor {
+				ExecutorArg::NewInterpreter => {
+					let opt_interpreter = bf_opt_interpreter::BfOptInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
+					opt_interpreter.start();
+				},
+				ExecutorArg::OldInterpreter => {
+					let old_interpreter = bf_interpreter::BfInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
+					old_interpreter.start();
+				},
+				ExecutorArg::Recompiler => {
+					let recompiler = bf_recompiler::BfRecompiler::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
+					recompiler.start();
+				}
+			}
+		},
+		MemoryType::SingleArray => {
+			let bf_memory = bf_memory::BfMemoryMemSafeSingleArray::new();
+			match &opts.executor {
+				ExecutorArg::NewInterpreter => {
+					let opt_interpreter = bf_opt_interpreter::BfOptInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
+					opt_interpreter.start();
+				},
+				ExecutorArg::OldInterpreter => {
+					let old_interpreter = bf_interpreter::BfInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
+					old_interpreter.start();
+				},
+				ExecutorArg::Recompiler => {
+					let recompiler = bf_recompiler::BfRecompiler::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
+					recompiler.start();
+				}
+			}
+		},
+		MemoryType::UnsafeArray => {
+			let bf_memory = bf_memory::BfMemoryMemUnsafe::new();
+			match &opts.executor {
+				ExecutorArg::NewInterpreter => {
+					let opt_interpreter = bf_opt_interpreter::BfOptInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
+					opt_interpreter.start();
+				},
+				ExecutorArg::OldInterpreter => {
+					let old_interpreter = bf_interpreter::BfInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
+					old_interpreter.start();
+				},
+				ExecutorArg::Recompiler => {
+					let recompiler = bf_recompiler::BfRecompiler::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
+					recompiler.start();
+				}
+			}
+		}
 	}
-	else {
-		let mut bf_int = bf_interpreter::BfInterpreter::new(file, bf_memory);
-		bf_int.start();
-		//println!("{:?}", bf_int);
-	}*/
-	println!("");
+	println!();
 }

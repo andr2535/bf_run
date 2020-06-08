@@ -107,10 +107,10 @@ impl std::fmt::Debug for BfMemoryMemUnsafe {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let mut string = String::with_capacity(self.array.len()*4);
 		string.push('[');
-		&self.array.iter().for_each(|value| {
+		self.array.iter().for_each(|value| {
 			string.push_str(format!("{:X}, ", *value).as_ref());
 		});
-		if self.array.len() > 0 {
+		if !self.array.is_empty() {
 			string.pop();
 			string.pop();
 		}

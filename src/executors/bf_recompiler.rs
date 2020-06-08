@@ -1,10 +1,10 @@
-use super::{bf_opt_interpreter, bf_opt_interpreter::Operation};
-use super::bf_memory;
+use super::{Executor, bf_opt_interpreter, bf_opt_interpreter::Operation};
+use crate::bf_memory;
 extern crate libc;
 
 const PAGE_SIZE: usize = 4096;
 
-
+#[derive(Debug)]
 pub struct RecompiledMemory {
 	recompiled_ops: Vec<u8>
 }
@@ -13,15 +13,9 @@ impl RecompiledMemory {
 		RecompiledMemory{recompiled_ops: Vec::new()}
 	}
 	pub fn push_opcodes(&mut self, opcodes: &[u8]) {
-		opcodes.into_iter().for_each(|opcode| {
+		opcodes.iter().for_each(|opcode| {
 			self.recompiled_ops.push(*opcode);
 		});
-	}
-	pub fn mut_vec(&mut self) -> &mut Vec<u8> {
-		&mut self.recompiled_ops
-	}
-	pub fn vec(&self) -> &Vec<u8> {
-		&self.recompiled_ops
 	}
 	pub fn add_fn_call(&mut self, function_addr: usize) {
 		// Pushing important registers to stack:
@@ -44,25 +38,29 @@ impl RecompiledMemory {
 		self.push_opcodes(&[0x59, 0x5a]); // pop rcx, pop rdx.
 	}
 }
-pub struct BfRecompiler<T> {
-	_bf_memory: Box<T>,
-	recompiled_memory: RecompiledMemory
+impl std::ops::Deref for RecompiledMemory {
+	type Target = Vec<u8>;
+
+	fn deref(&self) -> &Vec<u8> {
+		&self.recompiled_ops
+	}
+}
+impl std::ops::DerefMut for RecompiledMemory {
+	fn deref_mut(&mut self) -> &mut Vec<u8> {
+		&mut self.recompiled_ops
+	}
+
 }
 
-impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
-	extern "sysv64" fn get_ref(bf_memory: &mut T, index:i32) -> &mut u8 {
-		bf_memory.get_ref(index)
-	}
-	extern "sysv64" fn print_u8(value:u8) {
-		bf_opt_interpreter::BfOptInterpreter::<T>::print_char(value);
-	}
-	extern "sysv64" fn fetch_u8() -> u8 {
-		bf_opt_interpreter::BfOptInterpreter::<T>::get_char()
-	}
-	pub fn new(file: std::fs::File, bf_memory: T) -> BfRecompiler<T> {
+pub struct BfRecompiler<T> {
+	_bf_memory: Box<T>,
+	recompiled_memory: RecompiledMemory,
+	verbose: bool
+}
+impl<T: bf_memory::BfMemory + std::fmt::Debug> Executor<T> for BfRecompiler<T> {
+	fn new(code: String, bf_memory: T, enable_optimizations: bool, verbose: bool) -> BfRecompiler<T> {
 		// We use the bf_opt_int to get a list of operations, so we can use the unsafe memory without worries.
-		let mut bf_opt_int = bf_opt_interpreter::BfOptInterpreter::new(file, bf_memory::BfMemoryMemUnsafe::new());
-		bf_opt_int.optimize();
+		let bf_opt_int = bf_opt_interpreter::BfOptInterpreter::new(code, bf_memory::BfMemoryMemUnsafe::new(), enable_optimizations, verbose);
 		let operations = bf_opt_int.get_ops();
 
 		let mut recompiled_memory = RecompiledMemory::new();
@@ -92,27 +90,50 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 		// Return
 		recompiled_memory.push_opcodes(&[0xc3]); // return
 
-		BfRecompiler{_bf_memory: bf_memory_struct, recompiled_memory: recompiled_memory}
+		if verbose {
+			println!("Recompiled instructions:\n{:02X?}", recompiled_memory);
+		}
 
+		BfRecompiler{_bf_memory: bf_memory_struct, recompiled_memory, verbose}
+	}
+	fn start(self) {
+		let execute_memory = self.create_exec_memory().unwrap();
+		let function: fn() -> () = unsafe {std::mem::transmute(execute_memory)};
+		function();
+		unsafe {libc::free(execute_memory as *mut libc::c_void)};
+		if self.verbose {
+			println!("\nINFO: Memory after running:\n{:?}", self._bf_memory);
+		}
+	}
+}
+impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
+	extern "sysv64" fn get_ref(bf_memory: &mut T, index:i32) -> &mut u8 {
+		bf_memory.get_ref(index)
+	}
+	extern "sysv64" fn print_u8(value:u8) {
+		bf_opt_interpreter::BfOptInterpreter::<T>::print_char(value);
+	}
+	extern "sysv64" fn fetch_u8() -> u8 {
+		bf_opt_interpreter::BfOptInterpreter::<T>::get_char()
 	}
 
 	/// "dl" register stores value of the currently pointed to value.
 	/// "ecx" register stores the current index.
 	/// "rax" register points to the last used position in memory.
 	fn convert_to_machine_code(operations: &[Operation], bf_memory_addr: [u8;8], recompiled_memory: &mut RecompiledMemory) {
-		operations.into_iter().for_each(|operation| {
+		operations.iter().for_each(|operation| {
 			match operation {
 				Operation::Mod(value) => {
 					// Just add value to dl.
 					recompiled_memory.push_opcodes(&[0x80, 0xc2]); // Add dl
-					recompiled_memory.mut_vec().push((*value) as u8); // Argument for add dl.
+					recompiled_memory.push((*value) as u8); // Argument for add dl.
 				},
 				Operation::Move(move_value) => {
 					// Put value of "dl" back into its position in bf_memory.
 					recompiled_memory.push_opcodes(&[0x88, 0x10]); // mov [rax], dl
 					
 					let move_ops = T::get_move_ops(bf_memory_addr, T::get_ref as usize, *move_value);
-					recompiled_memory.push_opcodes(move_ops.vec());
+					recompiled_memory.push_opcodes(move_ops.as_ref());
 
 					// Move returned value into "dl" register, from [rax].
 					recompiled_memory.push_opcodes(&[0x8a, 0x10]); // mov dl, [rax]
@@ -121,10 +142,10 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 					let mut loop_block = RecompiledMemory::new();
 					BfRecompiler::<T>::convert_to_machine_code(operations, bf_memory_addr, &mut loop_block);
 
-					let block_size = loop_block.mut_vec().len() as i32;
+					let block_size = loop_block.len() as i32;
 
 					recompiled_memory.push_opcodes(&[0x80, 0xfa]); // cmp dl
-					recompiled_memory.mut_vec().push(0x00); // Value that dl should compare to
+					recompiled_memory.push(0x00); // Value that dl should compare to
 
 					// Add forward jump
 					recompiled_memory.push_opcodes(&[0x0f, 0x84]); // Jump equal
@@ -132,8 +153,8 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 					recompiled_memory.push_opcodes(&jump_forward_length);
 					
 					// Add loop_block
-					let store = std::mem::replace(loop_block.mut_vec(), Vec::new());
-					store.into_iter().for_each(|opcode| recompiled_memory.mut_vec().push(opcode));
+					let store = std::mem::replace(&mut *loop_block, Vec::new());
+					store.into_iter().for_each(|opcode| recompiled_memory.push(opcode));
 					
 					// Add backwards jump
 					recompiled_memory.push_opcodes(&[0xe9]); // Jump
@@ -142,41 +163,58 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 				},
 				Operation::SetValue(value) => {
 					// Set dl to value
-					recompiled_memory.mut_vec().push(0xb2); // mov dl
-					recompiled_memory.mut_vec().push(*value); // argument for mov dl.
+					recompiled_memory.push(0xb2); // mov dl
+					recompiled_memory.push(*value); // argument for mov dl.
 				},
 				Operation::GetInput => {
-					recompiled_memory.mut_vec().push(0x50); // Push rax
+					recompiled_memory.push(0x50); // Push rax
 					recompiled_memory.add_fn_call(BfRecompiler::<T>::fetch_u8 as usize);
 					recompiled_memory.push_opcodes(&[0x88, 0xc2]); // mov dl, al
-					recompiled_memory.mut_vec().push(0x58); // Pop rax
+					recompiled_memory.push(0x58); // Pop rax
 				},
 				Operation::PrintOutput => {
-					recompiled_memory.mut_vec().push(0x50); // Push rax
+					recompiled_memory.push(0x50); // Push rax
 					recompiled_memory.push_opcodes(&[0x40, 0x88, 0xd7]); // mov dil, dl
 					recompiled_memory.add_fn_call(BfRecompiler::<T>::print_u8 as usize);
-					recompiled_memory.mut_vec().push(0x58); // Pop rax
+					recompiled_memory.push(0x58); // Pop rax
 				}
 			}
 		});
 	}
-	fn create_exec_memory(&self) -> *const u8 {
-		let size = ((self.recompiled_memory.vec().len() / PAGE_SIZE) + 1) * PAGE_SIZE;
+	fn create_exec_memory(&self) -> Result<*mut u8, BFRecompilerError> {
+		let size = ((self.recompiled_memory.len() / PAGE_SIZE) + 1) * PAGE_SIZE;
 		let contents = unsafe {
-			let mut contents: *mut libc::c_void = std::mem::uninitialized();
-			libc::posix_memalign(&mut contents, PAGE_SIZE, size);
-			libc::mprotect(contents, size, libc::PROT_EXEC | libc::PROT_READ | libc::PROT_WRITE);
+			// Effectively creating a null pointer.
+			let mut contents: *mut libc::c_void = std::ptr::null_mut::<libc::c_void>();
+			let ret_value = libc::posix_memalign(&mut contents, PAGE_SIZE, size);
+			if ret_value != 0 {
+				return Err(BFRecompilerError::MemalignError(ret_value));
+			}
+			let ret_value = libc::mprotect(contents, size, libc::PROT_EXEC | libc::PROT_READ | libc::PROT_WRITE);
+			if ret_value != 0 {
+				return Err(BFRecompilerError::MProtectError(ret_value));
+			}
 			contents as *mut u8
 		};
-		self.recompiled_memory.vec().into_iter().enumerate().for_each(|(i, value)|{
-			unsafe {*contents.offset(i as isize) = *value};
+		self.recompiled_memory.iter().enumerate().for_each(|(i, value)| {
+			unsafe {*contents.add(i) = *value};
 		});
-		contents as *const u8
+		Ok(contents)
 	}
-	pub fn start_exec(self) {
-		let execute_memory = self.create_exec_memory();
-		let function: fn() -> () = unsafe {std::mem::transmute(execute_memory)};
-		function();
-		unsafe {libc::free(std::mem::transmute(execute_memory))};
+}
+
+#[derive(Debug)]
+pub enum BFRecompilerError {
+	MemalignError(i32),
+	MProtectError(i32)
+}
+impl std::error::Error for BFRecompilerError { }
+impl std::fmt::Display for BFRecompilerError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		use BFRecompilerError::*;
+		match self {
+			MemalignError(val) => write!(f, "Error aligning jit memory: {}", val),
+			MProtectError(val) => write!(f, "Error setting executable bit on jit memory: {}", val)
+		}
 	}
 }
