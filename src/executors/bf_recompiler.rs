@@ -4,14 +4,11 @@ extern crate libc;
 
 const PAGE_SIZE: usize = 4096;
 
-#[derive(Debug)]
-pub struct RecompiledMemory {
+#[derive(Debug, Default)]
+pub struct RecompiledOps {
 	recompiled_ops: Vec<u8>
 }
-impl RecompiledMemory {
-	pub fn new() -> RecompiledMemory {
-		RecompiledMemory{recompiled_ops: Vec::new()}
-	}
+impl RecompiledOps {
 	pub fn push_opcodes(&mut self, opcodes: &[u8]) {
 		opcodes.iter().for_each(|opcode| {
 			self.recompiled_ops.push(*opcode);
@@ -38,14 +35,14 @@ impl RecompiledMemory {
 		self.push_opcodes(&[0x59, 0x5a]); // pop rcx, pop rdx.
 	}
 }
-impl std::ops::Deref for RecompiledMemory {
+impl std::ops::Deref for RecompiledOps {
 	type Target = Vec<u8>;
 
 	fn deref(&self) -> &Vec<u8> {
 		&self.recompiled_ops
 	}
 }
-impl std::ops::DerefMut for RecompiledMemory {
+impl std::ops::DerefMut for RecompiledOps {
 	fn deref_mut(&mut self) -> &mut Vec<u8> {
 		&mut self.recompiled_ops
 	}
@@ -54,47 +51,53 @@ impl std::ops::DerefMut for RecompiledMemory {
 
 pub struct BfRecompiler<T> {
 	_bf_memory: Box<T>,
-	recompiled_memory: RecompiledMemory,
+	recompiled_memory: RecompiledOps,
 	verbose: bool
 }
 impl<T: bf_memory::BfMemory + std::fmt::Debug> Executor<T> for BfRecompiler<T> {
 	fn new(code: String, bf_memory: T, enable_optimizations: bool, verbose: bool) -> BfRecompiler<T> {
-		// We use the bf_opt_int to get a list of operations, so we can use the unsafe memory without worries.
-		let bf_opt_int = bf_opt_interpreter::BfOptInterpreter::new(code, bf_memory::BfMemoryMemUnsafe::new(), enable_optimizations, verbose);
-		let operations = bf_opt_int.get_ops();
 
-		let mut recompiled_memory = RecompiledMemory::new();
-		let mut bf_memory_struct = Box::new(bf_memory); // Heap allocate bf_memory.
-		
-		// First argument for get_ref, the memory.
-		recompiled_memory.push_opcodes(&[0x48, 0xbf]); // movabs rdi.
-		let bf_memory_addr:[u8; 8] = unsafe {std::mem::transmute(bf_memory_struct.as_mut())};
-		recompiled_memory.push_opcodes(&bf_memory_addr); // bf_memory_addr as argument for movabs rdi.
-		
-		// Second argument for get_ref, the index.
-		recompiled_memory.push_opcodes(&[0x48, 0xbe]); // movabs rsi.
-		let index_for_bf_memory:[u8; 8] = unsafe {std::mem::transmute(0isize)};
-		recompiled_memory.push_opcodes(&index_for_bf_memory); // argument for movabs rsi.
+		if cfg!(target_arch = "x86_64") {
+			// We use the bf_opt_int to get a list of operations, so we can use the unsafe memory without worries.
+			let bf_opt_int = bf_opt_interpreter::BfOptInterpreter::new(code, bf_memory::BfMemoryMemUnsafe::new(), enable_optimizations, verbose);
+			let operations = bf_opt_int.get_ops();
 
-		// Get initial value of "dl"
-		recompiled_memory.add_fn_call(BfRecompiler::<T>::get_ref as usize);
+			let mut recompiled_memory = RecompiledOps::default();
+			let mut bf_memory_struct = Box::new(bf_memory); // Heap allocate bf_memory.
 
-		// Move returned value into "dl" register, from [rax].
-		recompiled_memory.push_opcodes(&[0x8a, 0x10]);
-		// Set register "ecx" to zero.
-		recompiled_memory.push_opcodes(&[0xb9, 0, 0, 0, 0]);
+			// First argument for get_ref, the memory.
+			recompiled_memory.push_opcodes(&[0x48, 0xbf]); // movabs rdi.
+			let bf_memory_addr:[u8; 8] = unsafe {std::mem::transmute(bf_memory_struct.as_mut())};
+			recompiled_memory.push_opcodes(&bf_memory_addr); // bf_memory_addr as argument for movabs rdi.
 
-		// Perform the recompilation of the operations.
-		BfRecompiler::<T>::convert_to_machine_code(operations, unsafe {std::mem::transmute(bf_memory_struct.as_mut())}, &mut recompiled_memory);
-		
-		// Return
-		recompiled_memory.push_opcodes(&[0xc3]); // return
+			// Second argument for get_ref, the index.
+			recompiled_memory.push_opcodes(&[0x48, 0xbe]); // movabs rsi.
+			let index_for_bf_memory:[u8; 8] = unsafe {std::mem::transmute(0isize)};
+			recompiled_memory.push_opcodes(&index_for_bf_memory); // argument for movabs rsi.
 
-		if verbose {
-			println!("Recompiled instructions:\n{:02X?}", recompiled_memory);
+			// Get initial value of "dl"
+			recompiled_memory.add_fn_call(BfRecompiler::<T>::get_ref as usize);
+
+			// Move returned value into "dl" register, from [rax].
+			recompiled_memory.push_opcodes(&[0x8a, 0x10]);
+			// Set register "ecx" to zero.
+			recompiled_memory.push_opcodes(&[0xb9, 0, 0, 0, 0]);
+
+			// Perform the recompilation of the operations.
+			BfRecompiler::<T>::convert_to_machine_code(operations, unsafe {std::mem::transmute(bf_memory_struct.as_mut())}, &mut recompiled_memory);
+
+			// Return
+			recompiled_memory.push_opcodes(&[0xc3]); // return
+
+			if verbose {
+				println!("Recompiled instructions:\n{:02X?}", recompiled_memory);
+			}
+
+			BfRecompiler{_bf_memory: bf_memory_struct, recompiled_memory, verbose}
 		}
-
-		BfRecompiler{_bf_memory: bf_memory_struct, recompiled_memory, verbose}
+		else {
+			panic!("Recompiler is not implemented for this processor architecture!");
+		}
 	}
 	fn start(self) {
 		let execute_memory = self.create_exec_memory().unwrap();
@@ -120,7 +123,7 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 	/// "dl" register stores value of the currently pointed to value.
 	/// "ecx" register stores the current index.
 	/// "rax" register points to the last used position in memory.
-	fn convert_to_machine_code(operations: &[Operation], bf_memory_addr: [u8;8], recompiled_memory: &mut RecompiledMemory) {
+	fn convert_to_machine_code(operations: &[Operation], bf_memory_addr: [u8;8], recompiled_memory: &mut RecompiledOps) {
 		operations.iter().for_each(|operation| {
 			match operation {
 				Operation::Mod(value) => {
@@ -139,7 +142,7 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 					recompiled_memory.push_opcodes(&[0x8a, 0x10]); // mov dl, [rax]
 				},
 				Operation::Loop(operations) => {
-					let mut loop_block = RecompiledMemory::new();
+					let mut loop_block = RecompiledOps::default();
 					BfRecompiler::<T>::convert_to_machine_code(operations, bf_memory_addr, &mut loop_block);
 
 					let block_size = loop_block.len() as i32;

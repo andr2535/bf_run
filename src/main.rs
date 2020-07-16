@@ -8,18 +8,18 @@ use executors::*;
 
 #[derive(Debug)]
 enum ExecutorArg {
-	OldInterpreter,
-	NewInterpreter,
-	Recompiler
+	OldInterpreterArg,
+	NewInterpreterArg,
+	RecompilerArg
 }
 impl std::str::FromStr for ExecutorArg {
 	type Err = ArgumentParseError;
 
 	fn from_str(s: &str) -> Result<ExecutorArg, ArgumentParseError> {
 		match s {
-			"oi" => Ok(ExecutorArg::OldInterpreter),
-			"ni" => Ok(ExecutorArg::NewInterpreter),
-			"r"  => Ok(ExecutorArg::Recompiler),
+			"oi" => Ok(ExecutorArg::OldInterpreterArg),
+			"ni" => Ok(ExecutorArg::NewInterpreterArg),
+			"r"  => Ok(ExecutorArg::RecompilerArg),
 			_ => Err(ArgumentParseError::ExecutorParseError(s.to_string()))
 		}
 	}
@@ -27,18 +27,18 @@ impl std::str::FromStr for ExecutorArg {
 
 #[derive(Clap, Debug)]
 enum MemoryType {
-	UnsafeArray,
-	DualArray,
-	SingleArray
+	UnsafeArrayArg,
+	DualArrayArg,
+	SingleArrayArg
 }
 impl std::str::FromStr for MemoryType {
 	type Err = ArgumentParseError;
 
 	fn from_str(s: &str) -> Result<MemoryType, ArgumentParseError> {
 		match s {
-			"ua" => Ok(MemoryType::UnsafeArray),
-			"da" => Ok(MemoryType::DualArray),
-			"sa" => Ok(MemoryType::SingleArray),
+			"ua" => Ok(MemoryType::UnsafeArrayArg),
+			"da" => Ok(MemoryType::DualArrayArg),
+			"sa" => Ok(MemoryType::SingleArrayArg),
 			_ => Err(ArgumentParseError::MemoryTypeParseError(s.to_string()))
 		}
 	}
@@ -84,64 +84,44 @@ fn main() {
 	let opts = Opts::parse();
 
 	let code = {
-		use std::io::{Read};
+		use std::io::Read;
 		let mut code = String::new();
 		File::open(opts.file_name).unwrap().read_to_string(&mut code).unwrap();
 		code
 	};
 
-	match &opts.memory_type {
-		MemoryType::DualArray => {
-			let bf_memory = bf_memory::BfMemoryMemSafe::new();
-			match &opts.executor {
-				ExecutorArg::NewInterpreter => {
-					let opt_interpreter = bf_opt_interpreter::BfOptInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
-					opt_interpreter.start();
-				},
-				ExecutorArg::OldInterpreter => {
-					let old_interpreter = bf_interpreter::BfInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
-					old_interpreter.start();
-				},
-				ExecutorArg::Recompiler => {
-					let recompiler = bf_recompiler::BfRecompiler::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
-					recompiler.start();
-				}
+	macro_rules! create_static_dispatch {
+		([($LeftEnum:ident, $LeftStruct:ident)], [$(($RightEnum:ident, $RightStruct:ident)), *], $left_enum:ident, $right_enum:ident) => {
+			match $right_enum {
+				$($RightEnum => {
+					let executor = $RightStruct::new(code, $LeftStruct::new(), !opts.disable_optimization_passes, opts.verbose);
+					executor.start();
+					println!();
+					return;
+				})*
 			}
-		},
-		MemoryType::SingleArray => {
-			let bf_memory = bf_memory::BfMemoryMemSafeSingleArray::new();
-			match &opts.executor {
-				ExecutorArg::NewInterpreter => {
-					let opt_interpreter = bf_opt_interpreter::BfOptInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
-					opt_interpreter.start();
-				},
-				ExecutorArg::OldInterpreter => {
-					let old_interpreter = bf_interpreter::BfInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
-					old_interpreter.start();
-				},
-				ExecutorArg::Recompiler => {
-					let recompiler = bf_recompiler::BfRecompiler::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
-					recompiler.start();
-				}
+		};
+		
+		([($LeftEnum:ident, $LeftStruct:ident), $(($LeftEnumCont:ident, $LeftStructCont:ident)), *], [$(($RightEnum:ident, $RightStruct:ident)), *], 
+			$left_enum:ident, $right_enum:ident) => {
+			if let $LeftEnum = $left_enum {
+				create_static_dispatch!([($LeftEnum, $LeftStruct)], [$(($RightEnum, $RightStruct)), *], $left_enum, $right_enum)
 			}
-		},
-		MemoryType::UnsafeArray => {
-			let bf_memory = bf_memory::BfMemoryMemUnsafe::new();
-			match &opts.executor {
-				ExecutorArg::NewInterpreter => {
-					let opt_interpreter = bf_opt_interpreter::BfOptInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
-					opt_interpreter.start();
-				},
-				ExecutorArg::OldInterpreter => {
-					let old_interpreter = bf_interpreter::BfInterpreter::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
-					old_interpreter.start();
-				},
-				ExecutorArg::Recompiler => {
-					let recompiler = bf_recompiler::BfRecompiler::new(code, bf_memory, !opts.disable_optimization_passes, opts.verbose);
-					recompiler.start();
-				}
-			}
+			create_static_dispatch!([$(($LeftEnumCont, $LeftStructCont)), *], [$(($RightEnum, $RightStruct)), *], $left_enum, $right_enum)
 		}
 	}
-	println!();
+	{
+		use MemoryType::*;
+		use ExecutorArg::*;
+		use bf_memory::*;
+		use bf_opt_interpreter::BfOptInterpreter;
+		use bf_interpreter::BfInterpreter;
+		use bf_recompiler::BfRecompiler;
+		let memory_type = &opts.memory_type;
+		let struct_type = &opts.executor;
+		create_static_dispatch!(
+			[(DualArrayArg, BfMemoryMemSafe), (SingleArrayArg, BfMemoryMemSafeSingleArray), (UnsafeArrayArg, BfMemoryMemUnsafe)], 
+			[(NewInterpreterArg, BfOptInterpreter), (OldInterpreterArg, BfInterpreter), (RecompilerArg, BfRecompiler)],
+			memory_type, struct_type);
+	}
 }

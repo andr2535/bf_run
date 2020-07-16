@@ -1,10 +1,10 @@
-use crate::bf_recompiler::RecompiledMemory;
+use crate::bf_recompiler::RecompiledOps;
 
 pub trait BfMemory {
 	fn get_ref(&mut self, index:i32) -> &mut u8;
-	fn get_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledMemory;
-	fn get_standard_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledMemory {
-		let mut recompiled_memory = RecompiledMemory::new();
+	fn get_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledOps;
+	fn get_standard_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledOps {
+		let mut recompiled_memory = RecompiledOps::default();
 		// Increase the index.
 		let move_value:[u8;4] = unsafe {std::mem::transmute(move_value)};
 		recompiled_memory.push_opcodes(&[0x81, 0xc1]); // Add ecx
@@ -32,13 +32,13 @@ impl BfMemoryMemSafe {
 }
 impl BfMemory for BfMemoryMemSafe {
 	fn get_ref(&mut self, index: i32) -> &mut u8 {
-		let (index, vec) = if index < 0 {((index * -1) as usize, &mut self.negatives)} else {(index as usize, &mut self.positives)};
+		let (index, vec) = if index < 0 {(index.wrapping_neg() as usize, &mut self.negatives)} else {(index as usize, &mut self.positives)};
 		while vec.len() <= index {
 			vec.push(0);
 		}
 		unsafe {vec.get_unchecked_mut(index)}
 	}
-	fn get_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledMemory {
+	fn get_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledOps {
 		BfMemoryMemSafe::get_standard_move_ops(bf_memory_addr, get_ref_fn_addr, move_value)
 	}
 }
@@ -74,7 +74,7 @@ impl BfMemory for BfMemoryMemSafeSingleArray {
 			self.get_ref(index)
 		}
 	}
-	fn get_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledMemory {
+	fn get_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledOps {
 		BfMemoryMemSafe::get_standard_move_ops(bf_memory_addr, get_ref_fn_addr, move_value)
 	}
 }
@@ -93,8 +93,8 @@ impl BfMemory for BfMemoryMemUnsafe {
 	fn get_ref(&mut self, index: i32) -> &mut u8 {
 		unsafe {self.array.get_unchecked_mut(((BF_MEMORY_UNSAFE_SIZE as i32)/2 + index) as usize)}
 	}
-	fn get_move_ops(_bf_memory_addr: [u8; 8], _get_ref_fn_addr: usize, move_value: i32) -> RecompiledMemory {
-		let mut recompiled_memory = RecompiledMemory::new();
+	fn get_move_ops(_bf_memory_addr: [u8; 8], _get_ref_fn_addr: usize, move_value: i32) -> RecompiledOps {
+		let mut recompiled_memory = RecompiledOps::default();
 		// Modify the index.
 		let move_value:[u8;4] = unsafe {std::mem::transmute(move_value)};
 		recompiled_memory.push_opcodes(&[0x48, 0x8d, 0x80]); // lea rax, [rax + next argument]
