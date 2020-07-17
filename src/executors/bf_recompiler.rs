@@ -1,4 +1,4 @@
-use super::{Executor, bf_opt_interpreter, bf_opt_interpreter::Operation};
+use super::{Executor, operations::*};
 use crate::bf_memory;
 extern crate libc;
 
@@ -56,12 +56,12 @@ pub struct BfRecompiler<T> {
 }
 impl<T: bf_memory::BfMemory + std::fmt::Debug> Executor<T> for BfRecompiler<T> {
 	fn new(code: String, bf_memory: T, enable_optimizations: bool, verbose: bool) -> BfRecompiler<T> {
+		// Get operations.
+		let mut iterator = code.chars();
+		let mut operations = Operations::conv_string_to_operations(&mut iterator);
+		if enable_optimizations {operations.optimize();}
 
 		if cfg!(target_arch = "x86_64") {
-			// We use the bf_opt_int to get a list of operations, so we can use the unsafe memory without worries.
-			let bf_opt_int = bf_opt_interpreter::BfOptInterpreter::new(code, bf_memory::BfMemoryMemUnsafe::new(), enable_optimizations, verbose);
-			let operations = bf_opt_int.get_ops();
-
 			let mut recompiled_memory = RecompiledOps::default();
 			let mut bf_memory_struct = Box::new(bf_memory); // Heap allocate bf_memory.
 
@@ -84,7 +84,7 @@ impl<T: bf_memory::BfMemory + std::fmt::Debug> Executor<T> for BfRecompiler<T> {
 			recompiled_memory.push_opcodes(&[0xb9, 0, 0, 0, 0]);
 
 			// Perform the recompilation of the operations.
-			BfRecompiler::<T>::convert_to_machine_code(operations, unsafe {std::mem::transmute(bf_memory_struct.as_mut())}, &mut recompiled_memory);
+			BfRecompiler::<T>::convert_to_machine_code(&operations, unsafe {std::mem::transmute(bf_memory_struct.as_mut())}, &mut recompiled_memory);
 
 			// Return
 			recompiled_memory.push_opcodes(&[0xc3]); // return
@@ -114,10 +114,10 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 		bf_memory.get_ref(index)
 	}
 	extern "sysv64" fn print_u8(value:u8) {
-		bf_opt_interpreter::BfOptInterpreter::<T>::print_char(value);
+		super::print_char(value);
 	}
 	extern "sysv64" fn fetch_u8() -> u8 {
-		bf_opt_interpreter::BfOptInterpreter::<T>::get_char()
+		super::get_char()
 	}
 
 	/// "dl" register stores value of the currently pointed to value.
