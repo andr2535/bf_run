@@ -1,6 +1,23 @@
+/*
+	This file is part of bf_run.
+
+	bf_run is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	bf_run is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with bf_run.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 use std::ops::{Deref, DerefMut};
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Operation {
 	Mod(i8),
 	Move(i32),
@@ -10,32 +27,45 @@ pub enum Operation {
 	PrintOutput
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct Operations {
 	operations: Vec<Operation>
 }
 impl Operations {
-	pub fn conv_string_to_operations(iterator:&mut std::str::Chars<'_>) -> Operations {
+	pub fn conv_string_to_operations(code: &str) -> Operations {
+		let mut iterator = code.chars().enumerate();
+		Operations::iterator_to_operations(&mut iterator, None)
+	}
+	fn iterator_to_operations(iterator: &mut std::iter::Enumerate<std::str::Chars<'_>>, loop_start: Option<usize>) -> Operations {
 		let mut vec = Operations::default();
 		
-		while let Some(character) = iterator.next() {
+		while let Some((index, character)) = iterator.next() {
 			match character {
 				'+' => vec.push(Operation::Mod(1)),
 				'-' => vec.push(Operation::Mod(-1)),
 				'<' => vec.push(Operation::Move(-1)),
 				'>' => vec.push(Operation::Move(1)),
-				'[' => vec.push(Operation::Loop(Operations::conv_string_to_operations(iterator))),
-				']' => break,
+				'[' => vec.push(Operation::Loop(Operations::iterator_to_operations(iterator, Some(index)))),
+				']' => {
+					if loop_start.is_none() {
+						panic!("loop terminator without matching start character at index {}", index);
+					}
+					return vec;
+				},
 				',' => vec.push(Operation::GetInput),
 				'.' => vec.push(Operation::PrintOutput),
 				_ => ()
 			}
 		}
+		if let Some(loop_start) = loop_start {panic!("Loop started at index {} has no terminating ']' character", loop_start)}
 		vec
 	}
 	pub fn optimize(&mut self) {
-		let new_ops = Operations::optimise_operations(self.operations.as_slice());
-		*self = new_ops;
+		loop {
+			let new_ops = Operations::optimise_operations(self.operations.as_slice());
+			if *self == new_ops {break;}
+			*self = new_ops;
+		}
 	}
 	fn optimise_operations(old_ops: &[Operation]) -> Operations {
 		let mut new_ops = Operations::default();
@@ -106,5 +136,4 @@ impl DerefMut for Operations {
 	fn deref_mut(&mut self) -> &mut Vec<Operation> {
 		&mut self.operations
 	}
-	
 }

@@ -1,3 +1,20 @@
+/*
+	This file is part of bf_run.
+
+	bf_run is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	bf_run is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with bf_run.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 use super::{Executor, operations::*};
 use crate::bf_memory;
 extern crate libc;
@@ -57,9 +74,9 @@ pub struct BfRecompiler<T> {
 impl<T: bf_memory::BfMemory + std::fmt::Debug> Executor<T> for BfRecompiler<T> {
 	fn new(code: String, bf_memory: T, enable_optimizations: bool, verbose: bool) -> BfRecompiler<T> {
 		// Get operations.
-		let mut iterator = code.chars();
-		let mut operations = Operations::conv_string_to_operations(&mut iterator);
+		let mut operations = Operations::conv_string_to_operations(code.as_ref());
 		if enable_optimizations {operations.optimize();}
+		if verbose {println!("Operations before recompilation to machine code:\n{:?}", operations);}
 
 		if cfg!(target_arch = "x86_64") {
 			let mut recompiled_memory = RecompiledOps::default();
@@ -85,6 +102,9 @@ impl<T: bf_memory::BfMemory + std::fmt::Debug> Executor<T> for BfRecompiler<T> {
 
 			// Perform the recompilation of the operations.
 			BfRecompiler::<T>::convert_to_machine_code(&operations, unsafe {std::mem::transmute(bf_memory_struct.as_mut())}, &mut recompiled_memory);
+
+			// Put value of "dl" back into its position in bf_memory.
+			recompiled_memory.push_opcodes(&[0x88, 0x10]); // mov [rax], dl
 
 			// Return
 			recompiled_memory.push_opcodes(&[0xc3]); // return

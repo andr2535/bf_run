@@ -1,3 +1,20 @@
+/*
+	This file is part of bf_run.
+
+	bf_run is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	bf_run is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with bf_run.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 use crate::bf_memory::BfMemory;
 use super::Executor;
 use super::operations::*;
@@ -10,8 +27,7 @@ pub struct BfOptInterpreter<T> {
 }
 impl<T: BfMemory + std::fmt::Debug> Executor<T> for BfOptInterpreter<T> {
 	fn new(code: String, bf_memory: T, enable_optimizations: bool, verbose: bool) -> BfOptInterpreter<T> {
-		let mut iterator = code.chars();
-		let operations = Operations::conv_string_to_operations(&mut iterator);
+		let operations = Operations::conv_string_to_operations(code.as_ref());
 
 		let mut interpreter = BfOptInterpreter{memory: bf_memory, operations, verbose};
 		

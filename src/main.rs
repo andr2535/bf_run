@@ -1,8 +1,25 @@
+/*
+	This file is part of bf_run.
+
+	bf_run is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	bf_run is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with bf_run.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 use std::fs::File;
 
 use clap::Clap;
 
-pub mod bf_memory;
+mod bf_memory;
 mod executors;
 use executors::*;
 
@@ -66,18 +83,18 @@ struct Opts {
 	/// Old interpreter: 'oi'
 	/// New interpreter: 'ni'
 	/// Recompiler: 'r'
-	#[clap(short = "e", long = "executor", default_value = "r")]
+	#[clap(short = 'e', long = "executor", default_value = "r")]
 	executor: ExecutorArg,
 	/// Unsafe array: 'ua'
 	/// Single array: 'sa'
 	/// Dual array: 'da'
-	#[clap(short = "m", long = "memory_type", default_value = "ua")]
+	#[clap(short = 'm', long = "memory_type", default_value = "ua")]
 	memory_type: MemoryType,
 	/// Disables optimization passes
 	#[clap(long = "disable_optimization")]
 	disable_optimization_passes: bool,
-	/// Prints various information about the execution
-	#[clap(short = "v", long = "verbose")]
+	/// Prints information about recompiled operands, and memory after execution
+	#[clap(short = 'v', long = "verbose")]
 	verbose: bool
 }
 fn main() {
