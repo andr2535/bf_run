@@ -1,0 +1,13 @@
+[package]
+name = "static_dispath"
+version = "0.1.0"
+authors = ["Andreas Ejdesgaard <andreasejdesgaard@protonmail.com>"]
+edition = "2018"
+license = "GPL-3.0-or-later"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0.7"
+syn = "1.0.41"

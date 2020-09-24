@@ -15,7 +15,7 @@
 	along with bf_run.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-use crate::bf_recompiler::RecompiledOps;
+use crate::executors::bf_recompiler::RecompiledOps;
 
 pub trait BfMemory {
 	fn get_ref(&mut self, index:i32) -> &mut u8;

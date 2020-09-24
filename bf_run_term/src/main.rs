@@ -14,14 +14,8 @@
 	You should have received a copy of the GNU General Public License
 	along with bf_run.  If not, see <https://www.gnu.org/licenses/>.
 */
-
-use std::fs::File;
-
 use clap::Clap;
-
-mod bf_memory;
-mod executors;
-use executors::*;
+use static_dispath::static_dispatch;
 
 #[derive(Debug)]
 enum ExecutorArg {
@@ -99,46 +93,21 @@ struct Opts {
 }
 fn main() {
 	let opts = Opts::parse();
-
-	let code = {
-		use std::io::Read;
-		let mut code = String::new();
-		File::open(opts.file_name).unwrap().read_to_string(&mut code).unwrap();
-		code
-	};
-
-	macro_rules! create_static_dispatch {
-		([($LeftEnum:ident, $LeftStruct:ident)], [$(($RightEnum:ident, $RightStruct:ident)), *], $left_enum:ident, $right_enum:ident) => {
-			match $right_enum {
-				$($RightEnum => {
-					let executor = $RightStruct::new(code, $LeftStruct::new(), !opts.disable_optimization_passes, opts.verbose);
-					executor.start();
-					println!();
-					return;
-				})*
-			}
-		};
-		
-		([($LeftEnum:ident, $LeftStruct:ident), $(($LeftEnumCont:ident, $LeftStructCont:ident)), *], [$(($RightEnum:ident, $RightStruct:ident)), *], 
-			$left_enum:ident, $right_enum:ident) => {
-			if let $LeftEnum = $left_enum {
-				create_static_dispatch!([($LeftEnum, $LeftStruct)], [$(($RightEnum, $RightStruct)), *], $left_enum, $right_enum)
-			}
-			create_static_dispatch!([$(($LeftEnumCont, $LeftStructCont)), *], [$(($RightEnum, $RightStruct)), *], $left_enum, $right_enum)
-		}
-	}
+	let code = bf_run_core::read_bf_file_to_string(&opts.file_name).unwrap();
+	
 	{
 		use MemoryType::*;
 		use ExecutorArg::*;
-		use bf_memory::*;
-		use bf_opt_interpreter::BfOptInterpreter;
-		use bf_interpreter::BfInterpreter;
-		use bf_recompiler::BfRecompiler;
-		let memory_type = &opts.memory_type;
-		let struct_type = &opts.executor;
-		create_static_dispatch!(
-			[(DualArrayArg, BfMemoryMemSafe), (SingleArrayArg, BfMemoryMemSafeSingleArray), (UnsafeArrayArg, BfMemoryMemUnsafe)], 
-			[(NewInterpreterArg, BfOptInterpreter), (OldInterpreterArg, BfInterpreter), (RecompilerArg, BfRecompiler)],
-			memory_type, struct_type);
+		use bf_run_core::{bf_memory::*, executors::*};
+		static_dispatch!(
+			(Memory, opts.memory_type)[(DualArrayArg, BfMemoryMemSafe) (SingleArrayArg, BfMemoryMemSafeSingleArray) (UnsafeArrayArg, BfMemoryMemUnsafe)]
+			(Executor, opts.executor)[(NewInterpreterArg, BfOptInterpreter) (OldInterpreterArg, BfInterpreter) (RecompilerArg, BfRecompiler)]
+			{
+				let executor = Executor::new(code, Memory::new(), !opts.disable_optimization_passes, opts.verbose);
+				executor.start();
+			}
+		);
 	}
+
+	println!();
 }

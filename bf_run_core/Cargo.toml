@@ -1,0 +1,11 @@
+[package]
+name = "bf_run_core"
+version = "1.0.1"
+authors = ["Andreas Ejdesgaard <andreasejdesgaard@protonmail.com>"]
+edition = "2018"
+license = "GPL-3.0-or-later"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libc = "0.2.77"
