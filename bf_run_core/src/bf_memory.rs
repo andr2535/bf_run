@@ -18,6 +18,7 @@
 use crate::executors::bf_recompiler::RecompiledOps;
 
 pub trait BfMemory {
+	fn new(custom_size: Option<usize>) -> Self;
 	fn get_ref(&mut self, index:i32) -> &mut u8;
 	fn get_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledOps;
 	fn get_standard_move_ops(bf_memory_addr: [u8; 8], get_ref_fn_addr: usize, move_value: i32) -> RecompiledOps {
@@ -42,12 +43,11 @@ pub struct BfMemoryMemSafe {
 	negatives: Vec<u8>,
 	positives: Vec<u8>
 }
-impl BfMemoryMemSafe {
-	pub fn new() -> BfMemoryMemSafe {
-		BfMemoryMemSafe{negatives:Vec::with_capacity(1000), positives:Vec::with_capacity(1000)}
-	}
-}
 impl BfMemory for BfMemoryMemSafe {
+	fn new(custom_size: Option<usize>) -> BfMemoryMemSafe {
+		let size = custom_size.map_or(0, |val| (val/2));
+		BfMemoryMemSafe{negatives:Vec::with_capacity(size), positives:Vec::with_capacity(size)}
+	}
 	fn get_ref(&mut self, index: i32) -> &mut u8 {
 		let (index, vec) = if index < 0 {(index.wrapping_neg() as usize, &mut self.negatives)} else {(index as usize, &mut self.positives)};
 		while vec.len() <= index {
@@ -65,9 +65,6 @@ pub struct BfMemoryMemSafeSingleArray {
 	vector: Vec<u8>
 }
 impl BfMemoryMemSafeSingleArray {
-	pub fn new() -> BfMemoryMemSafeSingleArray {
-		BfMemoryMemSafeSingleArray{vector: vec![0u8;10]}
-	}
 	#[inline(never)]
 	fn increase_memory(&mut self) {
 		let old_vec_len = self.vector.len();
@@ -80,6 +77,11 @@ impl BfMemoryMemSafeSingleArray {
 	}
 }
 impl BfMemory for BfMemoryMemSafeSingleArray {
+	fn new(custom_size: Option<usize>) -> BfMemoryMemSafeSingleArray {
+		// No size below 2 can be passed, since it creates an infinite loop when trying to expand memory.
+		let size = custom_size.map_or(2, |size| if size > 1 {size} else {2});
+		BfMemoryMemSafeSingleArray{vector: vec![0u8; size]}
+	}
 	fn get_ref(&mut self, index: i32) -> &mut u8 {
 		let vec_len = self.vector.len();
 		let new_pos = index + (vec_len/2) as i32;
@@ -98,15 +100,15 @@ impl BfMemory for BfMemoryMemSafeSingleArray {
 
 const BF_MEMORY_UNSAFE_SIZE: usize = 65535;
 
+#[derive(Debug)]
 pub struct BfMemoryMemUnsafe {
-	array:[u8; BF_MEMORY_UNSAFE_SIZE]
-}
-impl BfMemoryMemUnsafe {
-	pub fn new() -> BfMemoryMemUnsafe {
-		BfMemoryMemUnsafe{array: [0u8; BF_MEMORY_UNSAFE_SIZE]}
-	}
+	array: Vec<u8>
 }
 impl BfMemory for BfMemoryMemUnsafe {
+	fn new(custom_size: Option<usize>) -> BfMemoryMemUnsafe {
+		let size = custom_size.map_or(BF_MEMORY_UNSAFE_SIZE, |val| val);
+		BfMemoryMemUnsafe{array: vec![0u8; size]}
+	}
 	fn get_ref(&mut self, index: i32) -> &mut u8 {
 		unsafe {self.array.get_unchecked_mut(((BF_MEMORY_UNSAFE_SIZE as i32)/2 + index) as usize)}
 	}
@@ -118,20 +120,5 @@ impl BfMemory for BfMemoryMemUnsafe {
 		recompiled_memory.push_opcodes(&move_value); // argument for lea.
 
 		recompiled_memory
-	}
-}
-impl std::fmt::Debug for BfMemoryMemUnsafe {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		let mut string = String::with_capacity(self.array.len()*4);
-		string.push('[');
-		self.array.iter().for_each(|value| {
-			string.push_str(format!("{:X}, ", *value).as_ref());
-		});
-		if !self.array.is_empty() {
-			string.pop();
-			string.pop();
-		}
-		string.push(']');
-		write!(f, "{}", string)
 	}
 }

@@ -84,6 +84,10 @@ struct Opts {
 	/// Dual array: 'da'
 	#[clap(short = 'm', long = "memory_type", default_value = "ua")]
 	memory_type: MemoryType,
+	/// Sets a custom length to the internal memory of the brainfuck program.
+	/// Probably only matters with "Unsafe array" memory setting.
+	#[clap(long = "memory_size")]
+	memory_size: Option<usize>,
 	/// Disables optimization passes
 	#[clap(long = "disable_optimization")]
 	disable_optimization_passes: bool,
@@ -103,7 +107,7 @@ fn main() {
 			(Memory, opts.memory_type)[(DualArrayArg, BfMemoryMemSafe) (SingleArrayArg, BfMemoryMemSafeSingleArray) (UnsafeArrayArg, BfMemoryMemUnsafe)]
 			(Executor, opts.executor)[(NewInterpreterArg, BfOptInterpreter) (OldInterpreterArg, BfInterpreter) (RecompilerArg, BfRecompiler)]
 			{
-				let executor = Executor::new(code, Memory::new(), !opts.disable_optimization_passes, opts.verbose);
+				let executor = Executor::new(code, Memory::new(opts.memory_size), !opts.disable_optimization_passes, opts.verbose);
 				executor.start();
 			}
 		);
