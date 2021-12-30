@@ -1,12 +1,12 @@
 [package]
 name = "bf_run_term"
-version = "1.0.2"
+version = "1.0.3"
 authors = ["Andreas Ejdesgaard <andreasejdesgaard@protonmail.com>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later"
 readme = "README.md"
 
 [dependencies]
 bf_run_core = { path = "../bf_run_core" }
 static_dispath = { path = "../static_dispath"}
-clap = { git = "https://github.com/clap-rs/clap/" }
+clap = { git = "https://github.com/clap-rs/clap/", features = ["derive"] }

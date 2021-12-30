@@ -14,7 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with bf_run.  If not, see <https://www.gnu.org/licenses/>.
 */
-use clap::Clap;
+use clap::Parser;
 use static_dispath::static_dispatch;
 
 #[derive(Debug)]
@@ -36,7 +36,7 @@ impl std::str::FromStr for ExecutorArg {
 	}
 }
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 enum MemoryType {
 	UnsafeArrayArg,
 	DualArrayArg,
@@ -70,10 +70,14 @@ impl std::fmt::Display for ArgumentParseError {
 	}
 }
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 #[clap(name = "Brainfuck Interpreter", about = "A Brainfuck interpreter and recompiler")]
 struct Opts {
+	/// Filename or brainfuck code, if terminal input is toggled.
 	file_name: String,
+	/// Interpret the filename as brainfuck code instead of a file path.
+	#[clap(short = 't', long = "terminal_input")]
+	terminal_input: bool,
 	/// Old interpreter: 'oi'
 	/// New interpreter: 'ni'
 	/// Recompiler: 'r'
@@ -97,7 +101,11 @@ struct Opts {
 }
 fn main() {
 	let opts = Opts::parse();
-	let code = bf_run_core::read_bf_file_to_string(&opts.file_name).unwrap();
+
+	let code = match opts.terminal_input {
+		false => bf_run_core::read_bf_file_to_string(&opts.file_name).unwrap(),
+		true => opts.file_name.clone()
+	};
 	
 	{
 		use MemoryType::*;

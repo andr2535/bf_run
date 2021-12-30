@@ -33,8 +33,7 @@ pub struct Operations {
 }
 impl Operations {
 	pub fn conv_string_to_operations(code: &str) -> Operations {
-		let mut iterator = code.chars().enumerate();
-		Operations::iterator_to_operations(&mut iterator, None)
+		Operations::iterator_to_operations(&mut code.chars().enumerate(), None)
 	}
 	fn iterator_to_operations(iterator: &mut std::iter::Enumerate<std::str::Chars<'_>>, loop_start: Option<usize>) -> Operations {
 		let mut vec = Operations::default();
