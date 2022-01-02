@@ -15,19 +15,20 @@
 	along with bf_run.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-use crate::bf_memory::BfMemory;
 use super::Executor;
+use crate::bf_memory::BfMemory;
 
 #[derive(Debug)]
 pub struct BfInterpreter<T> {
-	memory: T,
-	code: String,
-	verbose: bool
+	memory:  T,
+	code:    String,
+	verbose: bool,
 }
 impl<T: BfMemory + std::fmt::Debug> Executor<T> for BfInterpreter<T> {
 	fn new(code: String, bf_memory: T, _enable_optimizations: bool, verbose: bool) -> BfInterpreter<T> {
-		BfInterpreter{memory: bf_memory, code, verbose}
+		BfInterpreter { memory: bf_memory, code, verbose }
 	}
+
 	fn start(mut self) {
 		let mut mem_index = 0i32;
 		let mut iterator = self.code.chars();
@@ -62,8 +63,8 @@ impl<T: BfMemory + std::fmt::Debug> Executor<T> for BfInterpreter<T> {
 					else {
 						loop_stack.pop();
 					}
-				}
-				_ => ()
+				},
+				_ => (),
 			}
 		}
 		if self.verbose {
@@ -77,7 +78,7 @@ impl<T: BfMemory + std::fmt::Debug> BfInterpreter<T> {
 			match character {
 				'[' => BfInterpreter::<T>::skip_loops(iterator),
 				']' => return,
-				_ => ()
+				_ => (),
 			}
 		}
 	}
@@ -91,10 +92,12 @@ impl<T: BfMemory + std::fmt::Debug> BfInterpreter<T> {
 		lock.read_exact(&mut buf).unwrap();
 		*target = buf[0];
 	}
+
 	#[inline(never)]
 	fn print_char(source: u8) {
 		print!("{}", source as char);
 		use std::io;
+
 		use io::Write;
 		let mut stdout = io::stdout();
 		stdout.flush().unwrap();

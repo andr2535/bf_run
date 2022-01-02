@@ -21,7 +21,7 @@ use static_dispath::static_dispatch;
 enum ExecutorArg {
 	OldInterpreterArg,
 	NewInterpreterArg,
-	RecompilerArg
+	RecompilerArg,
 }
 impl std::str::FromStr for ExecutorArg {
 	type Err = ArgumentParseError;
@@ -30,8 +30,8 @@ impl std::str::FromStr for ExecutorArg {
 		match s {
 			"oi" => Ok(ExecutorArg::OldInterpreterArg),
 			"ni" => Ok(ExecutorArg::NewInterpreterArg),
-			"r"  => Ok(ExecutorArg::RecompilerArg),
-			_ => Err(ArgumentParseError::ExecutorParseError(s.to_string()))
+			"r" => Ok(ExecutorArg::RecompilerArg),
+			_ => Err(ArgumentParseError::ExecutorParseError(s.to_string())),
 		}
 	}
 }
@@ -40,7 +40,7 @@ impl std::str::FromStr for ExecutorArg {
 enum MemoryType {
 	UnsafeArrayArg,
 	DualArrayArg,
-	SingleArrayArg
+	SingleArrayArg,
 }
 impl std::str::FromStr for MemoryType {
 	type Err = ArgumentParseError;
@@ -50,7 +50,7 @@ impl std::str::FromStr for MemoryType {
 			"ua" => Ok(MemoryType::UnsafeArrayArg),
 			"da" => Ok(MemoryType::DualArrayArg),
 			"sa" => Ok(MemoryType::SingleArrayArg),
-			_ => Err(ArgumentParseError::MemoryTypeParseError(s.to_string()))
+			_ => Err(ArgumentParseError::MemoryTypeParseError(s.to_string())),
 		}
 	}
 }
@@ -58,14 +58,14 @@ impl std::str::FromStr for MemoryType {
 #[derive(Debug)]
 enum ArgumentParseError {
 	ExecutorParseError(String),
-	MemoryTypeParseError(String)
+	MemoryTypeParseError(String),
 }
-impl std::error::Error for ArgumentParseError { }
+impl std::error::Error for ArgumentParseError {}
 impl std::fmt::Display for ArgumentParseError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			ArgumentParseError::ExecutorParseError(err_string) => write!(f, "Error parsing executor string '{}'", err_string),
-			ArgumentParseError::MemoryTypeParseError(err_string) => write!(f, "Error parsing memory type '{}'", err_string)
+			ArgumentParseError::MemoryTypeParseError(err_string) => write!(f, "Error parsing memory type '{}'", err_string),
 		}
 	}
 }
@@ -74,43 +74,43 @@ impl std::fmt::Display for ArgumentParseError {
 #[clap(name = "Brainfuck Interpreter", about = "A Brainfuck interpreter and recompiler")]
 struct Opts {
 	/// Filename or brainfuck code, if terminal input is toggled.
-	file_name: String,
+	file_name:                   String,
 	/// Interpret the filename as brainfuck code instead of a file path.
 	#[clap(short = 't', long = "terminal_input")]
-	terminal_input: bool,
+	terminal_input:              bool,
 	/// Old interpreter: 'oi'
 	/// New interpreter: 'ni'
 	/// Recompiler: 'r'
 	#[clap(short = 'e', long = "executor", default_value = "r")]
-	executor: ExecutorArg,
+	executor:                    ExecutorArg,
 	/// Unsafe array: 'ua'
 	/// Single array: 'sa'
 	/// Dual array: 'da'
 	#[clap(short = 'm', long = "memory_type", default_value = "ua")]
-	memory_type: MemoryType,
+	memory_type:                 MemoryType,
 	/// Sets a custom length to the internal memory of the brainfuck program.
 	/// Probably only matters with "Unsafe array" memory setting.
 	#[clap(long = "memory_size")]
-	memory_size: Option<usize>,
+	memory_size:                 Option<usize>,
 	/// Disables optimization passes
 	#[clap(long = "disable_optimization")]
 	disable_optimization_passes: bool,
 	/// Prints information about recompiled operands, and memory after execution
 	#[clap(short = 'v', long = "verbose")]
-	verbose: bool
+	verbose:                     bool,
 }
 fn main() {
 	let opts = Opts::parse();
 
 	let code = match opts.terminal_input {
 		false => bf_run_core::read_bf_file_to_string(&opts.file_name).unwrap(),
-		true => opts.file_name.clone()
+		true => opts.file_name.clone(),
 	};
-	
+
 	{
-		use MemoryType::*;
-		use ExecutorArg::*;
 		use bf_run_core::{bf_memory::*, executors::*};
+		use ExecutorArg::*;
+		use MemoryType::*;
 		static_dispatch!(
 			(Memory, opts.memory_type)[(DualArrayArg, BfMemoryMemSafe) (SingleArrayArg, BfMemoryMemSafeSingleArray) (UnsafeArrayArg, BfMemoryMemUnsafe)]
 			(Executor, opts.executor)[(NewInterpreterArg, BfOptInterpreter) (OldInterpreterArg, BfInterpreter) (RecompilerArg, BfRecompiler)]

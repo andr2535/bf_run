@@ -15,7 +15,7 @@
 	along with bf_run.  If not, see <https://www.gnu.org/licenses/>.
 */
 pub fn read_bf_file_to_string(file_name: &str) -> std::io::Result<String> {
-	use std::{io::Read, fs::File};
+	use std::{fs::File, io::Read};
 	let mut code_u8 = Vec::new();
 	File::open(file_name)?.read_to_end(&mut code_u8)?;
 	Ok(String::from_utf8_lossy(code_u8.as_ref()).into())

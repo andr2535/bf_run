@@ -29,6 +29,7 @@ pub(crate) fn get_char() -> u8 {
 pub(crate) fn print_char(source: u8) {
 	print!("{}", source as char);
 	use std::io;
+
 	use io::Write;
 	let mut stdout = io::stdout();
 	stdout.flush().unwrap();
@@ -38,10 +39,10 @@ pub trait Executor<T: BfMemory + std::fmt::Debug> {
 	fn start(self);
 }
 
-pub mod operations;
 pub(crate) mod bf_interpreter;
 pub(crate) mod bf_opt_interpreter;
 pub(crate) mod bf_recompiler;
+pub mod operations;
 
 pub use bf_interpreter::BfInterpreter;
 pub use bf_opt_interpreter::BfOptInterpreter;
