@@ -17,7 +17,8 @@
 
 use super::{Executor, operations::*};
 use crate::bf_memory;
-extern crate libc;
+extern crate memmap;
+use memmap::{Mmap, MmapOptions};
 
 const PAGE_SIZE: usize = 4096;
 
@@ -121,9 +122,8 @@ impl<T: bf_memory::BfMemory + std::fmt::Debug> Executor<T> for BfRecompiler<T> {
 	}
 	fn start(self) {
 		let execute_memory = self.create_exec_memory().unwrap();
-		let function: fn() -> () = unsafe {std::mem::transmute(execute_memory)};
+		let function: fn() -> () = unsafe {std::mem::transmute(execute_memory.as_ptr())};
 		function();
-		unsafe {libc::free(execute_memory as *mut libc::c_void)};
 		if self.verbose {
 			println!("\nINFO: Memory after running:\n{:?}", self._bf_memory);
 		}
@@ -204,40 +204,28 @@ impl<T:bf_memory::BfMemory + std::fmt::Debug> BfRecompiler<T> {
 			}
 		});
 	}
-	fn create_exec_memory(&self) -> Result<*mut u8, BFRecompilerError> {
+	fn create_exec_memory(&self) -> Result<Mmap, BFRecompilerError> {
 		let size = ((self.recompiled_memory.len() / PAGE_SIZE) + 1) * PAGE_SIZE;
-		let contents = unsafe {
-			// Effectively creating a null pointer.
-			let mut contents: *mut libc::c_void = std::ptr::null_mut::<libc::c_void>();
-			let ret_value = libc::posix_memalign(&mut contents, PAGE_SIZE, size);
-			if ret_value != 0 {
-				return Err(BFRecompilerError::MemalignError(ret_value));
-			}
-			let ret_value = libc::mprotect(contents, size, libc::PROT_EXEC | libc::PROT_READ | libc::PROT_WRITE);
-			if ret_value != 0 {
-				return Err(BFRecompilerError::MProtectError(ret_value));
-			}
-			contents as *mut u8
-		};
-		self.recompiled_memory.iter().enumerate().for_each(|(i, value)| {
-			unsafe {*contents.add(i) = *value};
-		});
-		Ok(contents)
+		let mut mmap = MmapOptions::new().len(size).map_anon().map_err(|err| BFRecompilerError::MMapCreateError(err))?;
+		let mut operand_iterator = self.recompiled_memory.iter();
+		mmap.fill_with(|| *operand_iterator.next().unwrap_or(&0));
+		let mmap_exec = mmap.make_exec().map_err(|err| BFRecompilerError::MMakeExecError(err))?;
+		Ok(mmap_exec)
 	}
 }
 
 #[derive(Debug)]
 pub enum BFRecompilerError {
-	MemalignError(i32),
-	MProtectError(i32)
+	MMapCreateError(std::io::Error),
+	MMakeExecError(std::io::Error)
 }
 impl std::error::Error for BFRecompilerError { }
 impl std::fmt::Display for BFRecompilerError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		use BFRecompilerError::*;
 		match self {
-			MemalignError(val) => write!(f, "Error aligning jit memory: {}", val),
-			MProtectError(val) => write!(f, "Error setting executable bit on jit memory: {}", val)
+			MMapCreateError(err) => write!(f, "Error creating jit memory: {}", err),
+			MMakeExecError(err) => write!(f, "Error setting executable bit on jit memory: {}", err)
 		}
 	}
 }
