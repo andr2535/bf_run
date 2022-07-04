@@ -17,7 +17,6 @@
 
 use crate::bf_memory::BfMemory;
 
-
 pub(crate) fn get_char() -> u8 {
 	use std::io::{stdin, Read};
 	let stdin = stdin();
@@ -27,11 +26,9 @@ pub(crate) fn get_char() -> u8 {
 	buf[0]
 }
 pub(crate) fn print_char(source: u8) {
+	use std::io::{stdout, Write};
 	print!("{}", source as char);
-	use std::io;
-
-	use io::Write;
-	let mut stdout = io::stdout();
+	let mut stdout = stdout();
 	stdout.flush().unwrap();
 }
 pub trait Executor<T: BfMemory + std::fmt::Debug> {

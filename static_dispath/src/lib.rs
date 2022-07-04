@@ -106,7 +106,6 @@ impl Parse for StaticDispatch {
 ///                     let firstType = FirstType::new(SecondType::new());
 ///                 });
 /// ```
-/// 
 /// Which expands to
 /// ```ignore
 /// match actualEnum1 {
